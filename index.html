@@ -304,110 +304,145 @@
 
     <!-- JS API INTEGRATION VIA CLOUDFLARE WORKER PROXY -->
     <script>
-        // MASUKKAN URL CLOUDFLARE WORKER ANDA DI SINI
-        const WORKER_URL = 'https://coolfan.zibag999.workers.dev/';
+// MASUKKAN URL CLOUDFLARE WORKER ANDA DI SINI
+const WORKER_URL = 'https://coolfan.zibag999.workers.dev';
 
-        async function fetchProducts(keyword = 'portable neck fan') {
-            const loadingElement = document.getElementById('loading');
-            const gridElement = document.getElementById('product-grid');
+async function fetchProducts(keyword = 'portable neck fan') {
+    const loadingElement = document.getElementById('loading');
+    const gridElement = document.getElementById('product-grid');
 
-            if (loadingElement && gridElement) {
-                loadingElement.classList.remove('hidden');
-                gridElement.classList.add('hidden');
-            }
+    if (loadingElement && gridElement) {
+        loadingElement.classList.remove('hidden');
+        gridElement.classList.add('hidden');
+    }
 
-            try {
-                // Memanggil Cloudflare Worker tanpa mengekspos API Key
-                const response = await fetch(`${WORKER_URL}?keyword=${encodeURIComponent(keyword)}`);
-                const data = await response.json();
+    try {
+        const response = await fetch(`${WORKER_URL}?keyword=${encodeURIComponent(keyword)}`);
+        const data = await response.json();
 
-                const products = data?.aliexpress_affiliate_product_query_response?.resp_result?.result?.products?.product || [];
+        const products = data?.aliexpress_affiliate_product_query_response?.resp_result?.result?.products?.product || [];
 
-                if (products.length > 0) {
-                    renderProducts(products);
-                } else {
-                    renderFallbackProducts();
-                }
-            } catch (error) {
-                console.warn('Gagal memanggil Worker API, memuat kartu fallback:', error);
-                renderFallbackProducts();
-            } finally {
-                if (loadingElement && gridElement) {
-                    loadingElement.classList.add('hidden');
-                    gridElement.classList.remove('hidden');
-                }
-            }
+        if (products.length > 0) {
+            renderProducts(products);
+        } else {
+            renderFallbackProducts();
         }
+    } catch (error) {
+        console.warn('Gagal memanggil Worker API, memuat kartu fallback:', error);
+        renderFallbackProducts();
+    } finally {
+        if (loadingElement && gridElement) {
+            loadingElement.classList.add('hidden');
+            gridElement.classList.remove('hidden');
+        }
+    }
+}
 
-        function renderProducts(products) {
-            const gridElement = document.getElementById('product-grid');
-            if (!gridElement) return;
-            gridElement.innerHTML = '';
+// FUNGSI MEMPERBAIKI LINK GAMBAR (Menambahkan HTTPS jika diawali '//')
+function formatImageUrl(url) {
+    if (!url) return 'https://placehold.co/400x400/e2e8f0/1e293b?text=No+Image';
+    if (url.startsWith('//')) {
+        return 'https:' + url;
+    }
+    return url;
+}
 
-            products.forEach(item => {
-                const card = `
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between">
-                        <div>
-                            <img src="${item.product_main_image_url}" alt="${item.product_title}" class="w-full h-48 object-cover">
-                            <div class="p-4">
-                                <span class="bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">SG Delivery</span>
-                                <h3 class="font-bold text-gray-900 mt-2 text-sm line-clamp-2">${item.product_title}</h3>
-                                <div class="mt-3">
-                                    <span class="text-xl font-bold text-blue-600">S$ ${item.target_sale_price || item.target_original_price}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="p-4 pt-0">
-                            <a href="${item.promotion_link}" target="_blank" rel="nofollow noopener" 
-                               class="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-center py-2 px-4 rounded-lg transition text-sm">
-                                Check Deal on AliExpress
-                            </a>
+// FUNGSI MEMPERBAIKI LINK PRODUK AFFILIATE
+function formatProductLink(item) {
+    // 1. Utamakan link promosi/affiliate langsung dari API
+    if (item.promotion_link && item.promotion_link.startsWith('http')) {
+        return item.promotion_link;
+    }
+    // 2. Jika promotion_link kosong, gunakan product_detail_url
+    if (item.product_detail_url) {
+        let link = item.product_detail_url;
+        if (link.startsWith('//')) link = 'https:' + link;
+        return link;
+    }
+    // 3. Fallback jika semua URL dari API kosong
+    return 'https://www.aliexpress.com/w/wholesale-portable-fan-singapore.html';
+}
+
+function renderProducts(products) {
+    const gridElement = document.getElementById('product-grid');
+    if (!gridElement) return;
+    gridElement.innerHTML = '';
+
+    products.forEach(item => {
+        // Format gambar dan link produk dengan aman
+        const imageUrl = formatImageUrl(item.product_main_image_url);
+        const productUrl = formatProductLink(item);
+        const price = item.target_sale_price || item.target_original_price || item.app_sale_price || 'Check Deal';
+
+        const card = `
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                    <!-- Dipasang referrerpolicy="no-referrer" agar gambar AliExpress tidak diblokir -->
+                    <img src="${imageUrl}" 
+                         alt="${item.product_title}" 
+                         referrerpolicy="no-referrer" 
+                         onerror="this.onerror=null;this.src='https://placehold.co/400x400/e2e8f0/1e293b?text=Product+Image';"
+                         class="w-full h-48 object-cover">
+                    <div class="p-4">
+                        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">SG Delivery</span>
+                        <h3 class="font-bold text-gray-900 mt-2 text-sm line-clamp-2" title="${item.product_title}">${item.product_title}</h3>
+                        <div class="mt-3">
+                            <span class="text-xl font-bold text-blue-600">S$ ${price}</span>
                         </div>
                     </div>
-                `;
-                gridElement.insertAdjacentHTML('beforeend', card);
-            });
-        }
+                </div>
+                <div class="p-4 pt-0">
+                    <a href="${productUrl}" target="_blank" rel="nofollow noopener referrer" 
+                       class="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-center py-2 px-4 rounded-lg transition text-sm">
+                        Buy on AliExpress
+                    </a>
+                </div>
+            </div>
+        `;
+        gridElement.insertAdjacentHTML('beforeend', card);
+    });
+}
 
-        function renderFallbackProducts() {
-            const fallbackData = [
-                {
-                    title: "JISULIFE Handheld Portable Turbo Fan 5000mAh",
-                    price: "24.90",
-                    image: "https://placehold.co/400x400/e2e8f0/1e293b?text=Jisulife+Turbo+Fan",
-                    link: "https://s.click.aliexpress.com/e/_YOUR_ID_1"
-                },
-                {
-                    title: "Bladeless Neck Fan Hands-Free Rechargeable Air Cooler",
-                    price: "18.50",
-                    image: "https://placehold.co/400x400/e2e8f0/1e293b?text=Neck+Fan+Singapore",
-                    link: "https://s.click.aliexpress.com/e/_YOUR_ID_2"
-                },
-                {
-                    title: "Silent Smart DC Motor Standing Fan for HDB Bedrooms",
-                    price: "45.00",
-                    image: "https://placehold.co/400x400/e2e8f0/1e293b?text=DC+Standing+Fan",
-                    link: "https://s.click.aliexpress.com/e/_YOUR_ID_3"
-                }
-            ];
-            
-            const gridElement = document.getElementById('product-grid');
-            if (!gridElement) return;
-            gridElement.innerHTML = '';
-            fallbackData.forEach(item => {
-                const card = `
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between">
-                        <img src="${item.image}" class="w-full h-48 object-cover rounded">
-                        <h3 class="font-bold mt-2 text-sm">${item.title}</h3>
-                        <span class="text-xl font-bold text-blue-600 my-2">S$ ${item.price}</span>
-                        <a href="${item.link}" target="_blank" class="block bg-orange-500 text-white font-bold text-center py-2 rounded text-sm">Check Deal on AliExpress</a>
-                    </div>
-                `;
-                gridElement.insertAdjacentHTML('beforeend', card);
-            });
+function renderFallbackProducts() {
+    // Tautan contoh jika API belum aktif atau mengembalikan data kosong
+    const fallbackData = [
+        {
+            title: "JISULIFE Handheld Portable Turbo Fan 5000mAh",
+            price: "24.90",
+            image: "https://images.unsplash.com/photo-1618941709602-928aa9c07335?auto=format&fit=crop&w=400&q=80",
+            link: "https://www.aliexpress.com/w/wholesale-jisulife-portable-fan.html"
+        },
+        {
+            title: "Bladeless Neck Fan Hands-Free Rechargeable Air Cooler",
+            price: "18.50",
+            image: "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=400&q=80",
+            link: "https://www.aliexpress.com/w/wholesale-neck-fan.html"
+        },
+        {
+            title: "Silent Smart DC Motor Standing Fan for HDB Bedrooms",
+            price: "45.00",
+            image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?auto=format&fit=crop&w=400&q=80",
+            link: "https://www.aliexpress.com/w/wholesale-standing-fan.html"
         }
+    ];
+    
+    const gridElement = document.getElementById('product-grid');
+    if (!gridElement) return;
+    gridElement.innerHTML = '';
+    fallbackData.forEach(item => {
+        const card = `
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between">
+                <img src="${item.image}" class="w-full h-48 object-cover rounded" alt="${item.title}">
+                <h3 class="font-bold mt-2 text-sm">${item.title}</h3>
+                <span class="text-xl font-bold text-blue-600 my-2">S$ ${item.price}</span>
+                <a href="${item.link}" target="_blank" rel="nofollow noopener" class="block bg-orange-500 hover:bg-orange-600 text-white font-bold text-center py-2 rounded text-sm">Buy on AliExpress</a>
+            </div>
+        `;
+        gridElement.insertAdjacentHTML('beforeend', card);
+    });
+}
 
-        document.addEventListener('DOMContentLoaded', () => fetchProducts('portable neck fan'));
+document.addEventListener('DOMContentLoaded', () => fetchProducts('portable neck fan'));
     </script>
 </body>
 </html>
